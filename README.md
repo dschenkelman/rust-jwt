@@ -3,8 +3,7 @@ rust-jwt
 
 A simple implementation to work with JWTs in Rust
 
-Validating claims (not the signature)
-=================
+## Validating claims (not the signature)
 
 Use this approach to validate the token claims (without checking its signature):
 ```rust
