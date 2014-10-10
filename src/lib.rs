@@ -6,6 +6,7 @@
 
 extern crate libc;
 extern crate serialize;
+extern crate openssl;
 #[cfg(test)] extern crate test;
 
 pub mod jwt;
