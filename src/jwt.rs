@@ -5,6 +5,7 @@ extern crate openssl;
 use libc::time_t;
 use serialize::base64::FromBase64;
 use serialize::json;
+use std::default::Default;
 
 use std::str;
 use openssl::crypto::hash::{SHA256};
@@ -12,8 +13,31 @@ use openssl::crypto::hmac::{HMAC};
 
 #[deriving(Default)]
 pub struct Claims {
-  pub aud: Option<String>,
-  pub iss: Option<String>
+  aud: Option<String>,
+  iss: Option<String>
+}
+
+impl Claims{
+  fn new_with_aud(aud: &str) -> Claims{
+    Claims{
+      aud: Some(aud.to_string()),
+      ..Default::default()
+    }
+  }
+
+  fn new_with_iss(iss: &str) -> Claims{
+    Claims{
+      iss: Some(iss.to_string()),
+      ..Default::default()
+    }
+  }
+
+  fn new(aud: &str, iss: &str) -> Claims{
+    Claims{
+      aud: Some(aud.to_string()),
+      iss: Some(iss.to_string())
+    }
+  }
 }
 
 #[deriving(Decodable)]
@@ -180,7 +204,7 @@ mod test {
     /* always expired (unless time is wrong) */
     let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImlzcyI6Imlzc3VlciIsImV4cCI6MTQxMjkxMjE3MH0.1IokUgfvD7zLOKdtIT5nVn4IJC-tvs0V_68LVI82jFg";
 
-    let expected_claims = jwt::Claims { aud: Some("audience".to_string()), iss: Some("issuer".to_string()) };
+    let expected_claims = jwt::Claims::new("audience", "issuer");
 
     match jwt::validate_claims(token, &Some(expected_claims)){
       Ok(_) => assert!(false),
@@ -193,7 +217,7 @@ mod test {
     /* iss should be "issuer" */
     let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImlzcyI6Imlzc3VlciIsImV4cCI6OTQxMjkxMjE3MH0.CY-7e30citzNlDK3y3SP2ElZovyp6gID3rKpXozHo3M";
 
-    let expected_claims = jwt::Claims { aud: Some("audience".to_string()), iss: Some("wrong".to_string()) };
+    let expected_claims = jwt::Claims::new("audience", "wrong");
 
     match jwt::validate_claims(token, &Some(expected_claims)){
       Ok(_) => assert!(false),
@@ -206,7 +230,7 @@ mod test {
     /* aud should be "audience" */
     let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImlzcyI6Imlzc3VlciIsImV4cCI6OTQxMjkxMjE3MH0.CY-7e30citzNlDK3y3SP2ElZovyp6gID3rKpXozHo3M";
 
-    let expected_claims = jwt::Claims { aud: Some("wrong".to_string()), iss: Some("issuer".to_string()) };
+    let expected_claims = jwt::Claims::new("wrong", "issuer");
 
     match jwt::validate_claims(token, &Some(expected_claims)){
       Ok(_) => assert!(false),
@@ -219,7 +243,7 @@ mod test {
     /* always valid (unless time is wrong) */
     let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImlzcyI6Imlzc3VlciIsImV4cCI6OTQxMjkxMjE3MH0.CY-7e30citzNlDK3y3SP2ElZovyp6gID3rKpXozHo3M";
 
-    let expected_claims = jwt::Claims { aud: Some("audience".to_string()), iss: Some("issuer".to_string()) };
+    let expected_claims = jwt::Claims::new("audience", "issuer");
 
     match jwt::validate_claims(token, &Some(expected_claims)){
       Ok(payload) => {
@@ -236,7 +260,7 @@ mod test {
     /* always valid (unless time is wrong) */
     let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImlzcyI6Imlzc3VlciIsImV4cCI6OTQxMjkxMjE3MH0.CY-7e30citzNlDK3y3SP2ElZovyp6gID3rKpXozHo3M";
 
-    let expected_claims = jwt::Claims { aud: Some("audience".to_string()), iss: Some("issuer".to_string()) };
+    let expected_claims = jwt::Claims::new("audience", "issuer");
 
     match jwt::validate_token(token, "secret", &Some(expected_claims)){
        Ok(payload) => {
