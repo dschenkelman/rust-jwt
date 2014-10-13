@@ -11,28 +11,34 @@ use std::str;
 use openssl::crypto::hash::{SHA256};
 use openssl::crypto::hmac::{HMAC};
 
+/// Represents a claims structure that can be used to validate tokens.
 #[deriving(Default)]
 pub struct Claims {
-  aud: Option<String>,
-  iss: Option<String>
+  /// The token's audience claim.
+  pub aud: Option<String>,
+  /// The token's issuer claim.
+  pub iss: Option<String>
 }
 
 impl Claims{
-  fn new_with_aud(aud: &str) -> Claims{
+  /// Creates a new claims struct with the passed `aud` parameter.
+  pub fn new_with_aud(aud: &str) -> Claims{
     Claims{
       aud: Some(aud.to_string()),
       ..Default::default()
     }
   }
 
-  fn new_with_iss(iss: &str) -> Claims{
+  /// Creates a new claims struct with the passed `iss` parameter.
+  pub fn new_with_iss(iss: &str) -> Claims{
     Claims{
       iss: Some(iss.to_string()),
       ..Default::default()
     }
   }
 
-  fn new(aud: &str, iss: &str) -> Claims{
+  /// Creates a new claims struct with the passed `aud` and `iss` parameters.
+  pub fn new(aud: &str, iss: &str) -> Claims{
     Claims{
       aud: Some(aud.to_string()),
       iss: Some(iss.to_string())
@@ -57,6 +63,8 @@ fn epoch_seconds() -> i64 {
   }
 }
 
+/// Validates the `token` using the `secret` to check the signature
+/// and if `expected_claims` are provided they are checked.
 pub fn validate_token(token: &str, secret: &str, expected_claims: &Option<Claims>) -> Result<json::Json, String>{
   let parts = match split_token(token){
     Ok(p) => p,
@@ -95,6 +103,7 @@ pub fn validate_token(token: &str, secret: &str, expected_claims: &Option<Claims
   internal_validate_claims(parts[1], expected_claims)
 }
 
+/// validates the `token` claims comparing the `expected_claims` to the ones it has
 pub fn validate_claims(token: &str, expected_claims: &Option<Claims>) -> Result<json::Json, String>{
   let parts = match split_token(token){
     Ok(p) => p,
