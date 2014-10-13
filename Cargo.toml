@@ -1,7 +1,7 @@
 [package]
 
 name = "jwt"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["dschenkelman <damian.schenkelman@gmail.com>"]
 
 [dependencies.openssl]

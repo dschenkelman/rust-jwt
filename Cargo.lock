@@ -1,6 +1,6 @@
 [root]
 name = "jwt"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "openssl 0.0.0 (git+https://github.com/sfackler/rust-openssl.git#12b7427e0d01cb92810db2f0f51972b34947128e)",
 ]
