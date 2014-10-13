@@ -10,17 +10,15 @@ use std::str;
 use openssl::crypto::hash::{SHA256};
 use openssl::crypto::hmac::{HMAC};
 
-#[deriving(Decodable)]
+#[deriving(Default)]
 pub struct Claims {
-    pub aud: String,
-    pub iss: String,
-    pub exp: Option<i64>
+  pub aud: Option<String>,
+  pub iss: Option<String>
 }
 
 #[deriving(Decodable)]
-pub struct Header {
-  pub alg: String,
-  pub typ: String,
+struct Header {
+  alg: String
 }
 
 extern {
@@ -35,7 +33,7 @@ fn epoch_seconds() -> i64 {
   }
 }
 
-pub fn validate_token(token: &str, secret: &str, expected_claims: &Claims) -> Result<json::Json, String>{
+pub fn validate_token(token: &str, secret: &str, expected_claims: &Option<Claims>) -> Result<json::Json, String>{
   let parts = match split_token(token){
     Ok(p) => p,
     Err(m) => return Err(m)
@@ -73,7 +71,7 @@ pub fn validate_token(token: &str, secret: &str, expected_claims: &Claims) -> Re
   internal_validate_claims(parts[1], expected_claims)
 }
 
-fn internal_validate_claims(payload_part: &str, expected_claims: &Claims) -> Result<json::Json, String>{
+fn internal_validate_claims(payload_part: &str, expected_claims: &Option<Claims>) -> Result<json::Json, String>{
   let decoded_claims_part = payload_part.as_slice().from_base64().unwrap();
 
   let claims_json_str = match str::from_utf8(decoded_claims_part.as_slice()) {
@@ -110,18 +108,33 @@ fn internal_validate_claims(payload_part: &str, expected_claims: &Claims) -> Res
     None => None
   };
 
-  if expected_claims.aud.as_slice() != aud {
-    return Err("incorrect audience".to_string());
-  }
-
-  if expected_claims.iss.as_slice() != iss {
-    return Err("incorrect issuer".to_string());
-  }
-
   match exp {
     Some(exp) => {
       if exp < epoch_seconds() {
         return Err("token expired".to_string());
+      }
+    },
+    None => {}
+  }
+
+  match *expected_claims {
+    Some(ref expected) => {
+      match expected.aud {
+        Some(ref expected_aud) => {
+          if expected_aud.as_slice() != aud {
+            return Err("incorrect audience".to_string());
+          }
+        }
+        None => {}
+      }
+
+      match expected.iss {
+        Some(ref expected_iss) => {
+          if expected_iss.as_slice() != iss {
+            return Err("incorrect issuer".to_string());
+          }
+        }
+        None => {}
       }
     },
     None => {}
@@ -139,7 +152,7 @@ fn split_token(token: &str) -> Result<Vec<&str>, String>{
   Ok(parts)
 }
 
-pub fn validate_claims(token: &str, expected_claims: &Claims) -> Result<json::Json, String>{
+pub fn validate_claims(token: &str, expected_claims: &Option<Claims>) -> Result<json::Json, String>{
   let parts = match split_token(token){
     Ok(p) => p,
     Err(m) => return Err(m)
@@ -151,15 +164,16 @@ pub fn validate_claims(token: &str, expected_claims: &Claims) -> Result<json::Js
 #[cfg(test)]
 mod test {
   use jwt;
+  use std::default::Default;
 
   #[test]
   fn test_expired_token() {
     /* always expired (unless time is wrong) */
     let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImlzcyI6Imlzc3VlciIsImV4cCI6MTQxMjkxMjE3MH0.1IokUgfvD7zLOKdtIT5nVn4IJC-tvs0V_68LVI82jFg";
 
-    let expected_claims = jwt::Claims { aud: "audience".to_string(), iss: "issuer".to_string(), exp: None };
+    let expected_claims = jwt::Claims { aud: Some("audience".to_string()), iss: Some("issuer".to_string()) };
 
-    match jwt::validate_claims(token, &expected_claims){
+    match jwt::validate_claims(token, &Some(expected_claims)){
       Ok(_) => assert!(false),
       Err(m) => assert_eq!("token expired".to_string(), m)
     }
@@ -170,9 +184,9 @@ mod test {
     /* iss should be "issuer" */
     let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImlzcyI6Imlzc3VlciIsImV4cCI6OTQxMjkxMjE3MH0.CY-7e30citzNlDK3y3SP2ElZovyp6gID3rKpXozHo3M";
 
-    let expected_claims = jwt::Claims { aud: "audience".to_string(), iss: "wrong".to_string(), exp: None };
+    let expected_claims = jwt::Claims { aud: Some("audience".to_string()), iss: Some("wrong".to_string()) };
 
-    match jwt::validate_claims(token, &expected_claims){
+    match jwt::validate_claims(token, &Some(expected_claims)){
       Ok(_) => assert!(false),
       Err(m) => assert_eq!("incorrect issuer".to_string(), m)
     }
@@ -183,9 +197,9 @@ mod test {
     /* aud should be "audience" */
     let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImlzcyI6Imlzc3VlciIsImV4cCI6OTQxMjkxMjE3MH0.CY-7e30citzNlDK3y3SP2ElZovyp6gID3rKpXozHo3M";
 
-    let expected_claims = jwt::Claims { aud: "wrong".to_string(), iss: "issuer".to_string(), exp: None };
+    let expected_claims = jwt::Claims { aud: Some("wrong".to_string()), iss: Some("issuer".to_string()) };
 
-    match jwt::validate_claims(token, &expected_claims){
+    match jwt::validate_claims(token, &Some(expected_claims)){
       Ok(_) => assert!(false),
       Err(m) => assert_eq!("incorrect audience".to_string(), m)
     }
@@ -196,9 +210,9 @@ mod test {
     /* always valid (unless time is wrong) */
     let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImlzcyI6Imlzc3VlciIsImV4cCI6OTQxMjkxMjE3MH0.CY-7e30citzNlDK3y3SP2ElZovyp6gID3rKpXozHo3M";
 
-    let expected_claims = jwt::Claims { aud: "audience".to_string(), iss: "issuer".to_string(), exp: None };
+    let expected_claims = jwt::Claims { aud: Some("audience".to_string()), iss: Some("issuer".to_string()) };
 
-    match jwt::validate_claims(token, &expected_claims){
+    match jwt::validate_claims(token, &Some(expected_claims)){
       Ok(payload) => {
         assert_eq!(payload.find(&"aud".to_string()).unwrap().as_string().unwrap().to_string(), "audience".to_string());
         assert_eq!(payload.find(&"iss".to_string()).unwrap().as_string().unwrap().to_string(), "issuer".to_string());
@@ -213,9 +227,9 @@ mod test {
     /* always valid (unless time is wrong) */
     let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImlzcyI6Imlzc3VlciIsImV4cCI6OTQxMjkxMjE3MH0.CY-7e30citzNlDK3y3SP2ElZovyp6gID3rKpXozHo3M";
 
-    let expected_claims = jwt::Claims { aud: "audience".to_string(), iss: "issuer".to_string(), exp: None };
+    let expected_claims = jwt::Claims { aud: Some("audience".to_string()), iss: Some("issuer".to_string()) };
 
-    match jwt::validate_token(token, "secret", &expected_claims){
+    match jwt::validate_token(token, "secret", &Some(expected_claims)){
        Ok(payload) => {
         assert_eq!(payload.find(&"aud".to_string()).unwrap().as_string().unwrap().to_string(), "audience".to_string());
         assert_eq!(payload.find(&"iss".to_string()).unwrap().as_string().unwrap().to_string(), "issuer".to_string());
@@ -229,11 +243,47 @@ mod test {
   fn test_invalid_token_secret() {
     let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImlzcyI6Imlzc3VlciIsImV4cCI6OTQxMjkxMjE3MH0.CY-7e30citzNlDK3y3SP2ElZovyp6gID3rKpXozHo3M";
 
-    let expected_claims = jwt::Claims { aud: "audience".to_string(), iss: "issuer".to_string(), exp: None };
+    let expected_claims: jwt::Claims = Default::default();
 
-    match jwt::validate_token(token, "incorrect", &expected_claims){
+    match jwt::validate_token(token, "incorrect", &Some(expected_claims)){
       Ok(_) => assert!(false),
       Err(m) => assert_eq!("invalid signature".to_string(), m)
+    }
+  }
+
+  #[test]
+  fn test_invalid_aud_type() {
+    let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOjEyMywiaXNzIjoiaXNzdWVyIiwiZXhwIjo5NDEyOTEyMTcwfQ.gChwEXt7HC7oh4O2q93ja7kG7rHhSNPgbflPEzE5KmA";
+
+    let expected_claims: jwt::Claims = Default::default();
+
+    match jwt::validate_token(token, "secret", &Some(expected_claims)){
+      Ok(_) => assert!(false),
+      Err(m) => assert_eq!("aud claim is not string".to_string(), m)
+    }
+  }
+
+  #[test]
+  fn test_invalid_iss_type() {
+    let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImlzcyI6MTIzLCJleHAiOjk0MTI5MTIxNzB9.U9HYg3MAIBvnk6IyADCyiU6Dg-GYyPERE51WjhIKEmY";
+
+    let expected_claims: jwt::Claims = Default::default();
+
+    match jwt::validate_token(token, "secret", &Some(expected_claims)){
+      Ok(_) => assert!(false),
+      Err(m) => assert_eq!("iss claim is not string".to_string(), m)
+    }
+  }
+
+  #[test]
+  fn test_invalid_exp_type() {
+    let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdWRpZW5jZSIsImlzcyI6Imlzc3VlciIsImV4cCI6ImludmFsaWQifQ.vrBgdUhhNbvZoPncA4lDv62YrYq9iLKUD39slzq4Zjc";
+
+    let expected_claims: jwt::Claims = Default::default();
+
+    match jwt::validate_token(token, "secret", &Some(expected_claims)){
+      Ok(_) => assert!(false),
+      Err(m) => assert_eq!("exp claim is not valid value".to_string(), m)
     }
   }
 }
