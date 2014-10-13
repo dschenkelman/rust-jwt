@@ -71,6 +71,15 @@ pub fn validate_token(token: &str, secret: &str, expected_claims: &Option<Claims
   internal_validate_claims(parts[1], expected_claims)
 }
 
+pub fn validate_claims(token: &str, expected_claims: &Option<Claims>) -> Result<json::Json, String>{
+  let parts = match split_token(token){
+    Ok(p) => p,
+    Err(m) => return Err(m)
+  };
+
+  internal_validate_claims(parts[1], expected_claims)
+}
+
 fn internal_validate_claims(payload_part: &str, expected_claims: &Option<Claims>) -> Result<json::Json, String>{
   let decoded_claims_part = payload_part.as_slice().from_base64().unwrap();
 
@@ -84,28 +93,22 @@ fn internal_validate_claims(payload_part: &str, expected_claims: &Option<Claims>
     Err(_) => return Err("Failed to parse payload section".to_string())
   };
 
-  let aud = match json_payload.find(&"aud".to_string()){
-    Some(v) => match v.as_string(){
-      Some(aud) => aud,
-      None => return Err("aud claim is not string".to_string())
-    },
-    None => return Err("aud was not provided".to_string())
+  let aud = match extract_value_for_string(&json_payload, "aud"){
+    Ok(x) => x,
+    Err(s) => return Err(s)
   };
 
-  let iss = match json_payload.find(&"iss".to_string()){
-    Some(v) => match v.as_string(){
-      Some(iss) => iss,
-      None => return Err("iss claim is not string".to_string())
-    },
-    None => return Err("iss was not provided".to_string())
+  let iss = match extract_value_for_string(&json_payload, "iss"){
+    Ok(x) => x,
+    Err(s) => return Err(s)
   };
 
   let exp = match json_payload.find(&"exp".to_string()){
     Some(v) => match v.as_i64(){
       Some(exp) => Some(exp),
-      None => return Err("exp claim is not valid value".to_string())
+      None => return Err("invalid value for property exp".to_string())
     },
-    None => None
+    None => None,
   };
 
   match exp {
@@ -119,22 +122,14 @@ fn internal_validate_claims(payload_part: &str, expected_claims: &Option<Claims>
 
   match *expected_claims {
     Some(ref expected) => {
-      match expected.aud {
-        Some(ref expected_aud) => {
-          if expected_aud.as_slice() != aud {
-            return Err("incorrect audience".to_string());
-          }
-        }
-        None => {}
+      match validate_string_claim(&expected.aud, &aud, "audience") {
+        Ok(_) => {},
+        Err(m) => return Err(m)
       }
 
-      match expected.iss {
-        Some(ref expected_iss) => {
-          if expected_iss.as_slice() != iss {
-            return Err("incorrect issuer".to_string());
-          }
-        }
-        None => {}
+      match validate_string_claim(&expected.iss, &iss, "issuer") {
+        Ok(_) => {},
+        Err(m) => return Err(m)
       }
     },
     None => {}
@@ -146,19 +141,33 @@ fn internal_validate_claims(payload_part: &str, expected_claims: &Option<Claims>
 fn split_token(token: &str) -> Result<Vec<&str>, String>{
   let parts: Vec<&str> = token.split('.').collect();
   if parts.len() != 3{
-    return Err("Invalid number of parts".to_string());
+    return Err("invalid number of parts".to_string());
   }
 
   Ok(parts)
 }
 
-pub fn validate_claims(token: &str, expected_claims: &Option<Claims>) -> Result<json::Json, String>{
-  let parts = match split_token(token){
-    Ok(p) => p,
-    Err(m) => return Err(m)
-  };
+fn extract_value_for_string<'t>(this: &'t json::Json, prop: &str) -> Result<Option<&'t str>, String>{
+  match this.find(&prop.to_string()){
+    Some(j) => match j.as_string(){
+      Some(val) => Ok(Some(val)),
+      None => Err(format!("invalid value for property {0}", prop))
+    },
+    None => Ok(None)
+  }
+}
 
-  internal_validate_claims(parts[1], expected_claims)
+fn validate_string_claim(expected_claim: &Option<String>, actual: &Option<&str>, claim_name :&str) -> Result<(), String>{
+  match *expected_claim {
+    Some(ref x) => {
+      if actual.is_some() && x.as_slice() != actual.unwrap(){
+        return Err(format!("incorrect {0}", claim_name))
+      }
+    },
+    None => {}
+  }
+
+  Ok(())
 }
 
 #[cfg(test)]
@@ -259,7 +268,7 @@ mod test {
 
     match jwt::validate_token(token, "secret", &Some(expected_claims)){
       Ok(_) => assert!(false),
-      Err(m) => assert_eq!("aud claim is not string".to_string(), m)
+      Err(m) => assert_eq!("invalid value for property aud".to_string(), m)
     }
   }
 
@@ -271,7 +280,7 @@ mod test {
 
     match jwt::validate_token(token, "secret", &Some(expected_claims)){
       Ok(_) => assert!(false),
-      Err(m) => assert_eq!("iss claim is not string".to_string(), m)
+      Err(m) => assert_eq!("invalid value for property iss".to_string(), m)
     }
   }
 
@@ -283,7 +292,7 @@ mod test {
 
     match jwt::validate_token(token, "secret", &Some(expected_claims)){
       Ok(_) => assert!(false),
-      Err(m) => assert_eq!("exp claim is not valid value".to_string(), m)
+      Err(m) => assert_eq!("invalid value for property exp".to_string(), m)
     }
   }
 }
