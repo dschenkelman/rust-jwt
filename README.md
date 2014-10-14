@@ -9,7 +9,7 @@ The only valid algorithm today is HMAC SHA 256. The following code snippet provi
 extern cargo jwt;
 /* ... */
 
-use jwt::{Claims,validate_claims};
+use jwt::{Claims,validate_token};
 
 /* ... */
 
